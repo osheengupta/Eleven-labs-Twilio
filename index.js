@@ -29,6 +29,9 @@ fastify.register(fastifyWs);
 // Initialize Twilio client
 const twilioClient = Twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
+// Log Twilio client initialization (without exposing full credentials)
+console.log(`[Twilio] Client initialized with Account SID: ${TWILIO_ACCOUNT_SID.substring(0, 6)}...`);
+
 const PORT = process.env.PORT || 8000;
 
 // Root route for health check
@@ -38,11 +41,14 @@ fastify.get("/", async (_, reply) => {
 
 // Route to handle incoming calls from Twilio
 fastify.all("/incoming-call-eleven", async (request, reply) => {
+  // Determine the protocol (ws or wss) based on the request
+  const protocol = request.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws';
+  
   // Generate TwiML response to connect the call to a WebSocket stream
   const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
     <Response>
       <Connect>
-        <Stream url="wss://${request.headers.host}/media-stream" />
+        <Stream url="${protocol}://${request.headers.host}/media-stream" />
       </Connect>
     </Response>`;
 
@@ -162,8 +168,22 @@ fastify.post("/make-outbound-call", async (request, reply) => {
   }
 
   try {
+    // For local testing, we need a public URL that Twilio can access
+    // The user should run ngrok http 8000 in a separate terminal
+    // and replace localhost:8000 with the ngrok URL
+    
+    // Check if we're using localhost or a public URL
+    const host = request.headers.host;
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+    
+    if (isLocalhost) {
+      console.warn("[Warning] You are using localhost. For Twilio to connect to your ElevenLabs agent, you need a public URL.");
+      console.warn("[Warning] Please run 'ngrok http 8000' in a separate terminal and update your request to use the ngrok URL.");
+    }
+    
+    // Use the webhook URL that connects to the ElevenLabs agent
     const call = await twilioClient.calls.create({
-      url: `https://${request.headers.host}/incoming-call-eleven`, // Webhook for call handling
+      url: `http://${request.headers.host}/incoming-call-eleven`,
       to: to,
       from: TWILIO_PHONE_NUMBER,
     });
@@ -172,7 +192,17 @@ fastify.post("/make-outbound-call", async (request, reply) => {
     reply.send({ message: "Call initiated", callSid: call.sid });
   } catch (error) {
     console.error("[Twilio] Error initiating call:", error);
-    reply.status(500).send({ error: "Failed to initiate call" });
+    // Add more detailed error information
+    console.error(`[Twilio] Error details: Status: ${error.status}, Code: ${error.code}`);
+    console.error(`[Twilio] More info: ${error.moreInfo}`);
+    reply.status(500).send({ 
+      error: "Failed to initiate call", 
+      details: {
+        status: error.status,
+        code: error.code,
+        moreInfo: error.moreInfo
+      } 
+    });
   }
 });
 

@@ -123,7 +123,7 @@ Companio is an innovative AI journaling system that helps users maintain consist
 
 ### Starting the Server
 ```bash
-node index.js
+node index copy.js
 ```
 
 ### Making Outbound Calls

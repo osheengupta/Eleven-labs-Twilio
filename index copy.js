@@ -4,9 +4,6 @@ import dotenv from "dotenv";
 import fastifyFormBody from "@fastify/formbody";
 import fastifyWs from "@fastify/websocket";
 import Twilio from "twilio";
-import { exec } from "child_process";
-import fs from "fs";
-import path from "path";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -162,12 +159,12 @@ fastify.register(async (fastifyInstance) => {
   });
 });
 
-// Route to initiate a journal call
-fastify.post("/start-journal-entry", async (request, reply) => {
-  const { to } = request.body; // Your phone number
+// Route to initiate an outbound call
+fastify.post("/make-outbound-call", async (request, reply) => {
+  const { to } = request.body; // Destination phone number
 
   if (!to) {
-    return reply.status(400).send({ error: "Your phone number is required" });
+    return reply.status(400).send({ error: "Destination phone number is required" });
   }
 
   try {
@@ -191,8 +188,8 @@ fastify.post("/start-journal-entry", async (request, reply) => {
       from: TWILIO_PHONE_NUMBER,
     });
 
-    console.log(`[Twilio] Journal call initiated: ${call.sid}`);
-    reply.send({ message: "Journal call initiated", callSid: call.sid });
+    console.log(`[Twilio] Outbound call initiated: ${call.sid}`);
+    reply.send({ message: "Call initiated", callSid: call.sid });
   } catch (error) {
     console.error("[Twilio] Error initiating call:", error);
     // Add more detailed error information
@@ -208,76 +205,6 @@ fastify.post("/start-journal-entry", async (request, reply) => {
     });
   }
 });
-
-// Route to handle webhook calls from ElevenLabs
-fastify.post("/webhook/journal-entries", async (request, reply) => {
-  console.log("[ElevenLabs] Received webhook for journal entry");
-  
-  try {
-    // Log the raw request body for debugging
-    if (process.env.DEBUG === "true") {
-      console.log("[ElevenLabs] Webhook payload:", JSON.stringify(request.body, null, 2));
-    }
-    
-    // Process and save the journal data
-    await processJournalData(request.body);
-    
-    // Return success response
-    reply.code(200).send({ success: true, message: "Journal entry received and processed" });
-  } catch (error) {
-    console.error("[ElevenLabs] Error processing webhook:", error);
-    reply.code(500).send({ success: false, error: error.message });
-  }
-});
-
-// Function to process journal data from ElevenLabs webhook
-async function processJournalData(journalData) {
-  try {
-    // Create a temporary JSON file with the journal data
-    const tempDir = path.join(process.cwd(), "temp");
-    
-    // Create temp directory if it doesn't exist
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir);
-    }
-    
-    const tempFile = path.join(tempDir, `journal_data_${Date.now()}.json`);
-    
-    // Write journal data to temporary file
-    fs.writeFileSync(tempFile, JSON.stringify(journalData, null, 2));
-    
-    console.log(`[ElevenLabs] Journal data saved to ${tempFile}`);
-    
-    // Run the Python script to process the journal data
-    return new Promise((resolve, reject) => {
-      exec(`python sheets.py --webhook-data "${tempFile}"`, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`[Python] Error: ${error.message}`);
-          reject(error);
-          return;
-        }
-        
-        if (stderr) {
-          console.error(`[Python] stderr: ${stderr}`);
-        }
-        
-        console.log(`[Python] stdout: ${stdout}`);
-        
-        // Clean up the temporary file
-        try {
-          fs.unlinkSync(tempFile);
-        } catch (unlinkError) {
-          console.error(`[ElevenLabs] Error removing temp file: ${unlinkError.message}`);
-        }
-        
-        resolve(stdout);
-      });
-    });
-  } catch (error) {
-    console.error("[ElevenLabs] Error processing journal data:", error);
-    throw error;
-  }
-}
 
 // Start the Fastify server
 fastify.listen({ port: PORT }, (err) => {

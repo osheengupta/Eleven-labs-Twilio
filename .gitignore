@@ -1,1 +1,26 @@
 .env
+
+# Documentation files
+ARCHITECTURE.md
+PROJECT_NARRATIVE.md
+IMPLEMENTATION_SUMMARY.md
+
+# Data files
+journal_entries.csv
+call_logs.csv
+
+# Credentials and tokens
+credentials.json
+token.json
+token.pickle
+
+# JavaScript files
+index.js
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node modules
+node_modules/
